@@ -5,7 +5,17 @@
 /*	Other variable will be abandoned during the phase but retained in the result	*/
 /*	It is strongly suggested to set the number of products under 50 as of acceptable performance	*/
 
-%MACRO C_FILTERING(&libname1=, in_data1=, outlib=, outname=, outvars=);
+/*	Updates quotes	*/
+/*	2017.05.25 updates	*/ 
+/*	1.	change "outname" to "outratings"	*/
+/*	2.	the customer order does not change overtime, however it is suggested to keep at least*/
+/*	1 observation indicator in "outratings" so that you won't get lost on final output	*/	
+/*	3.	I accidentally made every loop pointer either i or j... now they are i j k l m n ...	*/
+/*	4.	"outname" now is for the output of final recommendation table	*/
+
+
+
+%MACRO C_FILTERING(&libname1=, in_data1=, outlib=, outratings=, outvars=, outname=);
 
 	PROC SQL NOPRINT;
 		SELECT COUNT(DISTINCT NAME) INTO :num_products FROM sashelp.vcolumn
@@ -32,12 +42,12 @@
 	DATA _2(KEEP=result_:);
 		SET _1;
 			
-			%DO i = 1 %TO &num_products.;
-				%DO j = 1 %TO &num_products.;
-					IF &i. = &j. THEN
-						result_&i._&j. = 0;
+			%DO k = 1 %TO &num_products.;
+				%DO l = 1 %TO &num_products.;
+					IF &k. = &l. THEN
+						result_&k._&l. = 0;
 					ELSE
-						result_&i._&j. = total_&i._&j. / (SQRT(total_&i.) * SQRT(total_&j.));
+						result_&k._&l. = total_&k._&l. / (SQRT(total_&k.) * SQRT(total_&l.));
 				%END;
 			%END;
 	RUN;
@@ -49,14 +59,14 @@
 	QUIT;
 	
 	
-	DATA &outlib..&outname.(KEEP=&outvars. product_result_sum_:);
+	DATA &outlib..&outratings.(KEEP=&outvars. product_result_sum_:);
 		SET _3;
 			
-			%DO i = 1 %TO &num_products.;
-				%DO j = 1 %TO &num_products.;
-					product_result_&i._&j. = product_&j. * result_&i._&j.;
+			%DO m = 1 %TO &num_products.;
+				%DO n = 1 %TO &num_products.;
+					product_result_&m._&n. = product_&n. * result_&m._&n.;
 				%END;
-				product_result_sum_&i. = sum(of product_result_&i._:);
+				product_result_sum_&m. = sum(of product_result_&m._:);
 			%END;
 	RUN;
 	
@@ -64,6 +74,43 @@
 		DELETE _1 _2 _3;
 	RUN;
 	
+
+	DATA &outlib..&outname.(DROP=product_result_sum_:);
+		LENGTH p1-p5 8. np1-np5 $50.;									/* Modify by yourself if your product */
+		SET &outlib..&outratings;											/* name exceed 50 characters */
+			%DO o = 1 %TO &num_products.;
+				IF product_result_sum_&o. > p5 THEN DO;
+					p5 = product_result_sum_&o.;
+					np5 = "product_&o.";
+					IF product_result_sum_&o. > p4 THEN DO;
+						p5 = p4;
+						np5 = np4;
+						p4 = product_result_sum_&o.;
+						np4 = "product_&o.";
+						IF product_result_sum_&o. > p3 THEN DO;
+							p4 = p3;
+							np4 = np3;
+							p3 = product_result_sum_&o.;
+							np3 = "product_&o.";
+							IF product_result_sum_&o. > p2 THEN DO;
+								p3 = p2;
+								np3 = np2;
+								p2 = product_result_sum_&o.;
+								np2 = "product_&o.";
+								IF product_result_sum_&o. > p1 THEN DO;
+									p2 = p1;
+									np2 = np1;
+									p1 = product_result_sum_&o.;
+									np1 = "product_&o.";
+								END;
+							END;
+						END;
+					END;
+				END;
+			%END;
+	RUN;
+
+
 %MEND;
 
-%C_FILTERING(libname1=, in_data1=, outlib=, outname=, outvars=);
+%C_FILTERING(libname1=, in_data1=, outlib=, outratings=, outvars=, outname=);
